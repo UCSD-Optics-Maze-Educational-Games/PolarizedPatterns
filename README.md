@@ -129,4 +129,4 @@ Students develop both scientific understanding of polarization physics and probl
 
 ## License
 
-This educational project is designed for academic use and learning purposes. Everyone is more than welcome to replicate and learn! For more details, please check the [MIT License](license).
+This educational project is designed for academic use and learning purposes. Everyone is more than welcome to replicate and learn! For more details, please check the [MIT License](/LICENSE).
