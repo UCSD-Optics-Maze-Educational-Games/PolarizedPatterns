@@ -120,7 +120,7 @@ Students develop both scientific understanding of polarization physics and probl
 - **Core Programming**: Developed foundational embedded systems code for keypad input, LCD display, and sequential game logic
 - **Optical Integration**: Integrated and calibrated polarizing filters, light source, and optical measurement systems
 
-### [Nick Ji](nickjiee.github.io)
+### [Nick Ji](https://nickjiee.github.io/)
 - **WiFi Connectivity Implementation**: Modified code to add robust WiFi connection management with offline mode fallback capabilities
 - **Google Sheets Integration**: Developed HTTP client functionality to send game completion status to Google Sheets via Apps Script for progress tracking
 - **Dynamic Game Management**: Implemented system to retrieve and display next game information from Google Sheets database on LCD screen
