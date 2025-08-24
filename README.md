@@ -1,8 +1,8 @@
-# Polarization Puzzle
+# Polarized Patterns
 
 ## Purpose & Educational Goals
 
-The Polarization Puzzle is an interactive educational game designed to teach people fundamental concepts in optics, specifically **light polarization phenomena**. By combining hands-on filter manipulation with riddle-solving challenges, this game makes abstract optical physics concepts tangible and engaging.
+**Polarized Patterns** is an interactive educational game designed to teach people fundamental concepts in optics, specifically **light polarization phenomena**. By combining hands-on filter manipulation with riddle-solving challenges, this game makes abstract optical physics concepts tangible and engaging.
 
 Students learn about:
 - Light polarization and polarizing filters
