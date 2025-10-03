@@ -33,7 +33,6 @@ bool gameStatus = 0; // game status monitor
 
 // ===== LCD initialization =====
 LiquidCrystal lcd(RS, E, D4, D5, D6, D7); // I2C LCD is not used for this game
-const String CLEAR_LINE = "                "; // flushes a line on the LCD
 String currentAttempt = ""; // stores current passcode attempt
 int correctCount = 0; // cound of correctly inputted passcodes
 const int LCD_COLS = 16;
@@ -133,8 +132,6 @@ void loop() {
       currentAttempt += key; // append keypress to current attempt
     }
     displayPrompt();
-    lcd.setCursor(0, 1);
-    lcd.print(CLEAR_LINE);
     lcd.setCursor(0, 1);
     lcd.print(currentAttempt);
   }
@@ -248,7 +245,6 @@ void displayNextGame() {
 
 // log in group using their group ID
 void handleLogin() {
-  displayPrompt();
   while (!groupLoggedIn) {
     char key = keypad.getKey();
     if (key) {
@@ -277,8 +273,6 @@ void handleLogin() {
         currentGroupId += key;
       }
       displayPrompt();
-      lcd.setCursor(0, 1);
-      lcd.print(CLEAR_LINE);
       lcd.setCursor(0, 1);
       lcd.print(currentGroupId);
     }
