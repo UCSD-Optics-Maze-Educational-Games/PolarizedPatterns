@@ -8,8 +8,8 @@
 #define DEVICE_NAME "game_3"
 #define NUM_GROUPS 5 // change based on the max number of groups in the session
 
-String groupCodes[NUM_GROUPS] = {"738", "291", "465", "823", "679"};
-String currentGroupId = ""; // stores ID of the currently logged in group
+int groupCodes[NUM_GROUPS] = {738, 291, 465, 823, 679};
+int currentGroupId = -1;
 bool groupLoggedIn = false;
 
 // Wi-Fi Credentials
@@ -38,6 +38,8 @@ int correctCount = 0; // cound of correctly inputted passcodes
 const int LCD_COLS = 16;
 const int LCD_ROWS = 2;
 
+String inputBuffer = "";
+
 // ====== 3 CODE VERSION ======
 const int NUM_PASSCODES = 3;
 const String passcodes[NUM_PASSCODES] = {"2458", "8542", "4528"};
@@ -64,8 +66,8 @@ byte colPins[COLS] = {27, 14, 12};
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
 void setup() {
-  Serial.begin(115200);
-  
+  Serial.begin(38400);
+
   lcd.begin(LCD_COLS, LCD_ROWS);
   lcd.print("Initializing...");
   delay(1000);
@@ -170,8 +172,6 @@ void displayPrompt() {
   }
 }
 
-// !!! NOTICE: below, I used showMessage() and other function to help with displaying via LCD, if you want to keep it original, just use native LCD codes to display messages
-
 // ========== Google Sheet Communication FUNCTIONS ==========
 void connectToWiFi() {
 
@@ -189,9 +189,9 @@ void connectToWiFi() {
 
 // Send game status to Google Sheets
 void sendGameStart() {
-  if (WiFi.status() == WL_CONNECTED && !currentGroupId.isEmpty()) {
+  if (WiFi.status() == WL_CONNECTED && currentGroupId > 0) {
     String url = Web_App_URL + "?action=start" + "&game=" + DEVICE_NAME + 
-                  "&group=group_" + currentGroupId;
+                  "&group=group_" + String(currentGroupId);
 
     HTTPClient http;
     http.begin(url.c_str());
@@ -213,7 +213,7 @@ void displayNextGame() {
   if (WiFi.status() == WL_CONNECTED) {
     // construct the request URL
     String nextGameUrl = Web_App_URL + "?action=done" + "&game=" + DEVICE_NAME +
-                          "&group=group_" + currentGroupId;
+                          "&group=group_" + String(currentGroupId);
 
     showMessage("Loading data...", 0, true, 0);
     
@@ -229,16 +229,10 @@ void displayNextGame() {
       // display next game
       showMessage("Next Game: ", 0, true, 0);
       showMessage(payload, 1, false, 5000);
-
-      showMessage("Press the button", 0, true, 0);
-      showMessage("to see magic ;)", 1, false, 0);
     } else {
       showMessage("Data fetch failed!", 0, true, 1000);
       showMessage("Please contact", 0, true, 0);
       showMessage("a staff!", 1, false, 5000);
-      
-      showMessage("Press the button", 0, true, 0);
-      showMessage("to see magic ;)", 1, false, 0);
     }
     
     http.end();  // close the HTTP connection
@@ -255,39 +249,41 @@ void handleLogin() {
     char key = keypad.getKey();
     if (key) {
       if (key == '#') {
-        lcd.clear();
-        // check if the entered group ID is valid
+        int inputCode = inputBuffer.toInt();
+        bool valid = false;
         for (int i = 0; i < NUM_GROUPS; i++) {
-          if (currentGroupId.equals(groupCodes[i])) {
-            groupLoggedIn = true;
-            lcd.print("Group logged in");
-            lcd.setCursor(0, 1);
-            lcd.print("with ID: ");
-            lcd.print(currentGroupId);
-            delay(2000);
-            return;
+          if (groupCodes[i] == inputCode) {
+            currentGroupId = i + 1;
+            valid = true;
+            break;
           }
         }
-        lcd.print("Invalid group ID");
-        lcd.setCursor(0, 1);
-        lcd.print("Please try again");
-        delay(2000);
-        currentGroupId = "";
-      } else if (key == '*' && !currentGroupId.isEmpty()) {
-        currentGroupId.remove(currentGroupId.length()-1);
-      } else {
-        currentGroupId += key;
+
+        if (valid) {
+          groupLoggedIn = true;
+          return;
+        } else {
+          showMessage("Invalid ID!", 0, true, 1000);
+          showMessage("Enter Group ID:", 0, true, 0);
+        }
+        inputBuffer = "";
       }
-      displayPrompt();
-      lcd.setCursor(0, 1);
-      lcd.print(currentGroupId);
+      else if (key == '*') {
+        inputBuffer = "";
+        showMessage("Input cleared", 0, true, 1000);
+        showMessage("Enter Group ID:", 0, true, 0);
+      } else {
+        inputBuffer += key;
+        lcd.setCursor(inputBuffer.length() - 1, 1);
+        lcd.print(key);
+      }
     }
   }
 }
 
 // log out group from the game
 void handleLogout() {
-  currentGroupId = "";
+  currentGroupId = -1;
   groupLoggedIn = false;
 }
 
