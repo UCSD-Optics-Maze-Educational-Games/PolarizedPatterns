@@ -64,8 +64,14 @@ byte colPins[COLS] = {27, 14, 12};
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
 void setup() {
-  connectToWiFi();
+  Serial.begin(115200);
+  
   lcd.begin(LCD_COLS, LCD_ROWS);
+  lcd.print("Initializing...");
+  delay(1000);
+
+  connectToWiFi();
+  displayPrompt();
 }
 
 void loop() {
