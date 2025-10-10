@@ -8,17 +8,9 @@
 #define DEVICE_NAME "game_3"
 #define NUM_GROUPS 5 // change based on the max number of groups in the session
 
-/**
- * Each unique group ID indicates a group's number.
- * Group 1: 738
- * Group 2: 291
- * Group 3: 465
- * Group 4: 823
- * Group 5: 679
- */
-String groupCodes[NUM_GROUPS] = {"738", "291", "465", "823", "679"};
-String currentGroupId = ""; // stores the group ID currently typed in
-int groupLoggedIn = -1; // which group is logged in (1, 2, 3, 4, 5)
+int groupCodes[NUM_GROUPS] = {738, 291, 465, 823, 679};
+int currentGroupId = -1;
+bool groupLoggedIn = false;
 
 // Wi-Fi Credentials
 const char* ssid = "UCSD-GUEST"; // Wi-Fi SSID
@@ -28,6 +20,8 @@ const unsigned long wifiCheckInterval = 10000; // check Wi-Fi connection every 1
 
 // Apps Script URL for Sheet
 String Web_App_URL = "https://script.google.com/macros/s/AKfycbylYj14j-Y-WTBLZ2l4LxsU1RmxNhvZmAZLOcgfZTPV1ZZnaDTxIpyOGvEXcoTHCaVheA/exec";
+
+bool gameStatus = 0; // game status monitor
 
 // LCD Pin Definitions for ESP32
 #define RS 23
@@ -41,19 +35,21 @@ String Web_App_URL = "https://script.google.com/macros/s/AKfycbylYj14j-Y-WTBLZ2l
 LiquidCrystal lcd(RS, E, D4, D5, D6, D7); // I2C LCD is not used for this game
 String currentAttempt = ""; // stores current passcode attempt
 int correctCount = 0; // cound of correctly inputted passcodes
-const byte LCD_COLS = 16;
-const byte LCD_ROWS = 2;
+const int LCD_COLS = 16;
+const int LCD_ROWS = 2;
+
+String inputBuffer = "";
 
 // ====== 3 CODE VERSION ======
 const int NUM_PASSCODES = 3;
 const String passcodes[NUM_PASSCODES] = {"2458", "8542", "4528"};
 
 // ====== 5 CODE VERSION ======
-// const byte NUM_PASSCODES = 5;
+// const int NUM_PASSCODES = 5;
 // const String passcodes[NUM_PASSCODES] = {"2458", "2584", "8542", "4528", "2548"};
 
 // ====== 10 CODE VERSION ======
-// const byte NUM_PASSCODES = 10;
+// const int NUM_PASSCODES = 10;
 // const String passcodes[NUM_PASSCODES] = {"2458", "8524", "2584", "8425", "8542", "4852", "2854", "4528", "5248", "4285"};
 
 // ===== Keypad initialization =====
@@ -77,6 +73,7 @@ void setup() {
   delay(1000);
 
   connectToWiFi();
+  displayPrompt();
 }
 
 void loop() {
@@ -91,8 +88,7 @@ void loop() {
   }
 
   // wait for a group to log in before the game can be played
-  if (groupLoggedIn < 0) {
-    displayPrompt();
+  if (!groupLoggedIn) {
     handleLogin();
     sendGameStart();
     displayPrompt();
@@ -169,7 +165,7 @@ void puzzleSolved() {
  */
 void displayPrompt() {
   lcd.clear();
-  if (groupLoggedIn > 0) {
+  if (groupLoggedIn) {
     lcd.print("Enter Passcode:");
   } else {
     lcd.print("Enter Group ID:");
@@ -191,11 +187,44 @@ void connectToWiFi() {
   }
 }
 
+// ========== LCD FUNCTIONS ==========
+// display helper
+void showMessage(const String &msg, int row, bool clearFirst, unsigned long waitMs, bool infinite = false) {
+  if (clearFirst) lcd.clear();
+  lcd.setCursor(0, row);
+  if (msg.length() <= LCD_COLS) {
+    lcd.print(msg);
+  } else {
+    scrollMessage(msg, row, 300, infinite);
+  }
+  if (waitMs) delay(waitMs);
+}
+
+// scroll long messages
+void scrollMessage(const String &msg, int row, unsigned long delayMs, bool infinite) {
+  int len = msg.length();
+  int total = len + 16;
+
+  do {
+    for (int offset = 0; offset <= total; offset++) {
+      lcd.setCursor(0, row);
+      for (int i = 0; i < 16; i++) {
+        int idx = offset + i - 16;
+        if (idx >= 0 && idx < len)
+          lcd.print(msg[idx]);
+        else
+          lcd.print(' ');
+      }
+      delay(delayMs);
+    }
+  } while (infinite);
+}
+
 // Send game status to Google Sheets
 void sendGameStart() {
-  if (WiFi.status() == WL_CONNECTED && groupLoggedIn > 0) {
+  if (WiFi.status() == WL_CONNECTED && currentGroupId > 0) {
     String url = Web_App_URL + "?action=start" + "&game=" + DEVICE_NAME + 
-                  "&group=group_" + String(groupLoggedIn);
+                  "&group=group_" + String(currentGroupId);
 
     HTTPClient http;
     http.begin(url.c_str());
@@ -214,10 +243,10 @@ void sendGameStart() {
 
 // receive data and display next game
 void displayNextGame() {
-  if (WiFi.status() == WL_CONNECTED && groupLoggedIn > 0) {
+  if (WiFi.status() == WL_CONNECTED) {
     // construct the request URL
     String nextGameUrl = Web_App_URL + "?action=done" + "&game=" + DEVICE_NAME +
-                          "&group=group_" + String(groupLoggedIn);
+                          "&group=group_" + String(currentGroupId);
 
     showMessage("Loading data...", 0, true, 0);
     
@@ -232,7 +261,7 @@ void displayNextGame() {
 
       // display next game
       showMessage("Next Game: ", 0, true, 0);
-      showMessage(payload, 1, false, 5000);
+      showMessage(payload, 1, false, 5000, true);
     } else {
       showMessage("Data fetch failed!", 0, true, 1000);
       showMessage("Please contact", 0, true, 0);
@@ -249,70 +278,44 @@ void displayNextGame() {
 
 // log in group using their group ID
 void handleLogin() {
-  while (groupLoggedIn < 0) {
+  while (!groupLoggedIn) {
     char key = keypad.getKey();
     if (key) {
       if (key == '#') {
-        lcd.clear();
-        // check if the entered group ID is valid
+        int inputCode = inputBuffer.toInt();
+        bool valid = false;
         for (int i = 0; i < NUM_GROUPS; i++) {
-          if (currentGroupId.equals(groupCodes[i])) {
-            groupLoggedIn = i + 1;
-            lcd.print("Group logged in");
-            lcd.setCursor(0, 1);
-            lcd.print("with ID: ");
-            lcd.print(currentGroupId);
-            delay(2000);
-            return;
+          if (groupCodes[i] == inputCode) {
+            currentGroupId = i + 1;
+            valid = true;
+            break;
           }
         }
-        lcd.print("Invalid group ID");
-        lcd.setCursor(0, 1);
-        lcd.print("Please try again");
-        delay(2000);
-        currentGroupId = "";
+
+        if (valid) {
+          groupLoggedIn = true;
+          return;
+        } else {
+          showMessage("Invalid ID!", 0, true, 1000);
+          showMessage("Enter Group ID:", 0, true, 0);
+        }
+        inputBuffer = "";
       }
       else if (key == '*') {
-        currentGroupId.remove(currentGroupId.length()-1);
+        inputBuffer = "";
+        showMessage("Input cleared", 0, true, 1000);
+        showMessage("Enter Group ID:", 0, true, 0);
       } else {
-        currentGroupId += key;
+        inputBuffer += key;
+        lcd.setCursor(inputBuffer.length() - 1, 1);
+        lcd.print(key);
       }
-      displayPrompt();
-      lcd.setCursor(0, 1);
-      lcd.print(currentGroupId);
     }
   }
 }
 
 // log out group from the game
 void handleLogout() {
-  currentGroupId = "";
-  groupLoggedIn = -1;
-}
-
-// ========== LCD FUNCTIONS ==========
-// display helper
-void showMessage(const String &msg, int row, bool clearFirst, unsigned long waitMs) {
-  if (clearFirst) lcd.clear();
-  lcd.setCursor(0, row);
-  if (msg.length() <= LCD_COLS) {
-    lcd.print(msg);
-  } else {
-    scrollMessage(msg, row, 200);
-  }
-  if (waitMs) delay(waitMs);
-}
-
-// scroll long messages
-void scrollMessage(const String &msg, int row, unsigned long delayMs) {
-  int len = msg.length();
-  int total = len + LCD_COLS;
-  for (int offset = 0; offset <= total; offset++) {
-    lcd.setCursor(0, row);
-    for (int i = 0; i < LCD_COLS; i++) {
-      int idx = offset + i - LCD_COLS;
-      if (idx >= 0 && idx < len) lcd.print(msg[idx]); else lcd.print(' ');
-    }
-    delay(delayMs);
-  }
+  currentGroupId = -1;
+  groupLoggedIn = false;
 }
